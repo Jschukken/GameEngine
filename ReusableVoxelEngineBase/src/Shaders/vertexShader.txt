@@ -1,0 +1,113 @@
+#version 400 core
+   
+in vec3 position;
+in vec3 normal;
+in vec3 vcolor;
+
+out vec3 color;
+
+struct Light{
+	vec3 diffuse;
+	vec3 specular;
+	vec3 lightPosition;
+};
+
+uniform mat4 transformationMatrix;
+uniform mat4 projectionMatrix;
+uniform mat4 viewMatrix;
+uniform vec3 cameraPosition;
+
+uniform Light lights[10];
+uniform vec3 sunAmbient;
+uniform vec3 sunDiffuse;
+uniform vec3 sunSpecular;
+uniform vec3 sunDirection;
+
+
+
+vec3 calculatePhongShading(in vec4 vertexPos, in vec3 normal) {
+
+	vec3 ambient = vec3(0.0, 0.0, 0.0);
+	vec3 diffuse = vec3(0.0, 0.0, 0.0);
+	vec3 specular = vec3(0.0, 0.0, 0.0);
+	for(int i = 0; i < 10; i = i + 1){
+		if(lights[i].lightPosition.x == 0 && lights[i].lightPosition.y == 0 && lights[i].lightPosition.z == 0){
+			i = 10; //if no lights left to be rendered
+			break;
+		}
+		
+		// find the light's position w.r.t. the vertex position	
+		vec4 lightPos = vec4(lights[i].lightPosition, 1.0);
+		if(length(lightPos.xyz - vertexPos.xyz) < 20){
+			float distanceAdjust = (20-length(lightPos.xyz - vertexPos.xyz))/ 20.0;
+			vec3 lightDir = normalize(lightPos.xyz - vertexPos.xyz);
+ 
+			// find the reflected vector
+			vec3 ref = reflect(-lightDir, normal);
+ 
+			// find the "reverse" vertex direction vector (origin for eye coordinates at camera's position)
+			// "reverse" needed due to the direction of the reflected vector being opposite to the eye coordinate w.r.t. normal
+			vec3 vertDir = normalize(cameraPosition-vertexPos.xyz);
+ 
+			// find the dot product in advance between lightDir and normal
+			// saves having to recalculate it in order to check if specular component exists
+			float lightDirDotNormal = max(dot(lightDir, normal), 0.0);
+ 
+			// find the diffuse component
+			diffuse += lights[i].diffuse * 1 * distanceAdjust;//1 is matiral diffuse
+ 
+			// define the specular component
+ 
+			// see if there's any point in finding specular component
+			if(lightDirDotNormal > 0.0) {
+				specular += lights[i].specular * 1.0 * pow(max(dot(ref, vertDir), 0.0), 40) * distanceAdjust;//1 is material specular, .1 is shinyness
+			}
+ 		}
+ 	}
+ 	
+		vec3 lightDir = normalize(sunDirection);
+ 
+	// find the reflected vector
+		vec3 ref = reflect(-lightDir, normal);
+ 
+	// find the "reverse" vertex direction vector (origin for eye coordinates at camera's position)
+	// "reverse" needed due to the direction of the reflected vector being opposite to the eye coordinate w.r.t. normal
+		vec3 vertDir = normalize(cameraPosition-vertexPos.xyz);
+ 
+	// find the ambient component
+		ambient += sunAmbient * 1;//1 is material ambient reflectivity
+ 
+	// find the dot product in advance between lightDir and normal
+	// saves having to recalculate it in order to check if specular component exists
+		float lightDirDotNormal = max(dot(lightDir, normal), 0.0);
+ 
+	// find the diffuse component
+		diffuse += sunDiffuse * 1 * lightDirDotNormal;//1 is matiral diffuse
+ 
+	// define the specular component
+ 
+	// see if there's any point in finding specular component
+		if(lightDirDotNormal > 0.0) {
+			specular += sunSpecular * 1.0 * pow(max(dot(ref, vertDir), 0.0), 4);//1 is material specular, .1 is shinyness
+		}
+		
+	// final shading = ambient + diffuse + specular
+		return (ambient + diffuse + specular)*vcolor;
+
+}
+ 
+void main() {
+	// find the the vertex coordinate and the normal in eye-space coordinates
+	
+
+	
+	vec4 normal4 = (transformationMatrix * vec4(normal+position, 1.0));
+	vec4 vertexPos = transformationMatrix * vec4(position, 1.0);
+	vec3 vertexNormal = normalize(normal4.xyz - vertexPos.xyz);
+ 
+	color = calculatePhongShading(vertexPos, vertexNormal);
+	//color = vcolor;
+ 
+	// find the final vertex position
+	gl_Position = projectionMatrix * viewMatrix * transformationMatrix * vec4(position, 1.0);
+}
